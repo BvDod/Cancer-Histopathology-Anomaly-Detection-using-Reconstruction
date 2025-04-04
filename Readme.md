@@ -8,4 +8,5 @@ I will compare 3 different inputs that can be used for the final supervised CNN:
 1. Using the pixel-wise reconstruction error-map as the sole input.
 2. Using both the original image and the reconstruction, as input. (2 channels)
 3. Using the original image, the reconstruction and the pixel-wise error as the input (3 channels)
+   
 *Note: for the amount of channels I'm assuming an input image with a single channel*
