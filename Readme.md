@@ -1,6 +1,6 @@
 # Cancer Histopathology Anomaly Detection: CNN on unsupervised VQ-VAE Reconstruction
 
-In this repository, I will be performing classification of the presence of cancer on histopathological slides through anomaly detection. This will be achieved by first training a VIT VQ-VAE on healthy tissue in an unsupervised manner. The assumption here is that the VQ-VAE will learn how to reconstruct healthy tissue, but will struggle with never-before-seen samples of cancerous cells. 
+In this repository, I will be performing classification of the presence of cancer on histopathological slides through anomaly detection. This will be achieved by first training a VIT VQ-VAE on healthy tissue in an unsupervised manner. The assumption here is that the VQ-VAE will learn how to reconstruct healthy tissue, but will struggle with never-before-seen samples of cancerous cells. See my other projects for the source of my self-implemented VIT VQ-VAE that i use in this project
 
 The reconstruction error will thus be a proxy of how much a sample looks like the distribution that the VQ-VAE was trained on, which was only healthy tissue. This reconstruction error could be directly taken as the likelihood that a sample is cancerous, but a better approach is to use the pixel-wise reconstruction error to train a new CNN in a supervised way.
 
