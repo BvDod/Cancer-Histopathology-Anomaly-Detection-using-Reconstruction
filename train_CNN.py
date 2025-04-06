@@ -11,32 +11,86 @@ from pathlib import Path
 from PIL import Image as im 
 
 from torchvision.models import resnet18
+from torchmetrics.classification import BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryF1Score, BinaryAUROC
 
 import numpy as np
 
-def build_model_input(x_train, recon_model, input_types):
-    input_tensor = torch.Tensor()
+from models.vq_vae import VQVAE
 
+def build_model_input(x_train, y_train, recon_model, input_types, writer=None):
+    input_tensor = torch.Tensor().to('cuda')
+    x_train = x_train.to('cuda')
+
+    
     if "reconstruction" in input_types or "error_map" in input_types:
         recon_model.eval()
-        with torch.no_grad:
-            recon, vq_loss = recon_model(x_train)
+        
+        with torch.no_grad():
+            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=True):
+                recon, vq_loss = recon_model(x_train)
 
     if "image" in input_types:
         input_tensor = torch.cat((input_tensor, x_train))
     
     if "reconstruction" in input_types:
-        input_tensor = torch.cat((input_tensor, recon))
+        input_tensor = torch.cat((input_tensor, recon), dim=1)
+
+        grid = plot_grid_samples_tensor(recon[:9])
+        writer.add_image("reconstruction", grid, 0)
+        
+        grid = plot_grid_samples_tensor(x_train[:9])
+        writer.add_image("input image", grid, 0)
 
     if "error_map" in input_types:
-        error_map = torch.nn.functional.mse_loss(x_train, recon, reduction=None)
-        error_map = torch.mean(error_map, dim=0)
-        input_tensor = torch.cat((input_tensor, error_map))
+        error_map = torch.nn.functional.mse_loss(x_train, recon, reduction='none')
+        error_map = torch.mean(error_map, dim=1)
+        error_map = error_map.unsqueeze(1)
+        error_map = error_map / (0.5/5)
+        input_tensor = torch.cat((input_tensor, error_map), dim=1)
+
+        grid = plot_grid_samples_tensor(error_map[:9])
+        writer.add_image("error_map", grid, 0, dataformats="CHW")
+
 
     return input_tensor
 
+import torch.nn as nn
 
+# ----- Simple CNN -----
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        def conv_block(in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.MaxPool2d(2)
+            )
 
+        self.features = nn.Sequential(
+            conv_block(3, 32),      # -> (112x112)
+            conv_block(32, 64),     # -> (56x56)
+            conv_block(64, 128),    # -> (28x28)
+            conv_block(128, 256),   # -> (14x14)
+        )
+
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(256 * 14 * 14, 512),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, 2)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        return self.classifier(x)
+
+    
 def train_cnn(settings):
 
     # Tensorboard for logging
@@ -51,15 +105,15 @@ def train_cnn(settings):
     train, test, input_shape, channels, train_var = get_dataset(settings["dataset"], print_stats=True)
     channels = len(settings["input_types"]) * 3 - (int("error_map" in settings["input_types"]) * 2)
 
-    dataloader_train = DataLoader(train, batch_size=settings["batch_size"], shuffle=True, drop_last=True, pin_memory=False, num_workers=8)
-    dataloader_test = DataLoader(test, batch_size=128, pin_memory=False, num_workers=8, shuffle=True)
+    dataloader_train = DataLoader(train, batch_size=settings["batch_size"], shuffle=True, drop_last=True)
+    dataloader_test = DataLoader(test, batch_size=128, pin_memory=False, shuffle=True)
 
     # Setting up model
     model_settings = settings["model_settings"]
     model_settings["num_channels"] = channels
     model_settings["input_shape"] = input_shape
 
-    model = resnet18(num_classes=9).to(device)
+    model = SimpleCNN().to(device)
 
     # Replace the first convolution layer to support custom amount of in channels
     model.conv1 = torch.nn.Conv2d(
@@ -68,56 +122,62 @@ def train_cnn(settings):
     kernel_size=7,
     stride=2,
     padding=3,
-    bias=False
+    bias=False,
+    device=device,
     )
 
-    if "error_map" in model_settings["input_types"] or "reconstruction" in model_settings["input_types"]:
-        model_settings = None
+    
+    if "error_map" in settings["input_types"] or "reconstruction" in settings["input_types"]:
         model_settings = settings["model_settings"]
-        model_settings["num_channels"] = channels
+        model_settings["num_channels"] = 3
         model_settings["input_shape"] = input_shape
         recon_model = VQVAE(model_settings).to(device)
         recon_model.load_state_dict(torch.load("reconstruction.pt", weights_only=True))
+        recon_model.to(device)
         recon_model.eval()
+    else:
+        recon_model = None
+    
+    optimizer = torch.optim.AdamW(model.parameters(), lr=settings["learning_rate"], weight_decay=1e-4)
+    criterion = torch.nn.CrossEntropyLoss(weight= torch.tensor([2/9, 7/9], device=device))
+    scaler = torch.amp.GradScaler("cuda" ,enabled=True)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=settings["learning_rate"])
-    criterion = torch.nn.CrossEntropyLoss()
-    # scaler = torch.amp.GradScaler("cuda" ,enabled=True)
-
+    accuracy = BinaryAccuracy()
+    precision = BinaryPrecision()
+    recall = BinaryRecall()
+    f1 = BinaryF1Score()
 
     # Training loop
     train_losses, test_losses = [], []
     best_test_loss = float("inf")
     for epoch in range(settings["max_epochs"]):
         train_losses_epoch = []
-        print(f"Epoch: {epoch}/{settings['max_epochs']}")
+        print(f"\n\nEpoch: {epoch}/{settings['max_epochs']}")
         
         # Training
         model.train()
         correct = 0
         for batch_i, (x_train, y_train) in enumerate(dataloader_train):
+            y_train = (y_train > 6).long()
+            x_train = build_model_input(x_train, y_train, recon_model, settings["input_types"], writer=writer)
             
-            x_train = build_model_input(x_train, recon_model, model_settings["input_types"])
-            
-            x_train = x_train.to(device)
-            #with torch.autocast(device_type=device, dtype=torch.float16, enabled=True):
-            pred = model(x_train)
-            mse = criterion(pred, y_train)
+            with torch.autocast(device_type=device, dtype=torch.float16, enabled=True):
+                x_train = x_train.to(device)
+                y_train = y_train.to(device)
+                pred = model(x_train)
+                mse = criterion(pred, y_train)
 
-            _, predicted = torch.max(pred.detach(), 1)
-            correct += (predicted == y_train).sum().item()
-            loss = mse
-            loss.backward()
-            optimizer.step()
-            #scaler.scale(loss).backward()
-            #scaler.step(optimizer)
-            #scaler.update()
+                _, predicted = torch.max(pred.detach(), 1)
+                correct += (predicted == y_train).sum().item()
+                loss = mse
+            writer.add_scalar("batch_loss", loss.item(), epoch * len(dataloader_train) + batch_i)
+                
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             train_losses_epoch.append(loss.item())
-            optimizer.zero_grad()
-            print(train_losses_epoch[-1])
-            break
+            optimizer.zero_grad()     
             
-
            
         print(f"Train loss: {sum(train_losses_epoch) / len(train_losses_epoch)}")
         print(f"Train accuracy: {correct/len(train)}")
@@ -139,25 +199,38 @@ def train_cnn(settings):
         with torch.no_grad():
             test_losses_epoch = []
             test_mse_epoch = []
+            y_test_total = torch.Tensor()
+            predicted_total = torch.Tensor()
             for x_test, y_test in dataloader_test:
-                x_test = x_test.to(device)
-                #with torch.autocast(device_type=device, dtype=torch.float16, enabled=True):
-                pred = model(x_test)
-                mse = criterion(pred, y_test)
-                loss = mse
+                with torch.autocast(device_type=device, dtype=torch.float16, enabled=True):
+                    y_test = (y_test > 6).long()
+                    x_test = build_model_input(x_test, y_test, recon_model, settings["input_types"], writer=writer)
+                    x_test = x_test.to(device)
+                    y_test = y_test.to(device)
+                    pred = model(x_test)
+                    mse = criterion(pred, y_test)
+                    loss = mse
                 test_losses_epoch.append(loss.item())
                 test_mse_epoch.append(mse.item())
 
                 _, predicted = torch.max(pred, 1)
                 correct += (predicted == y_test).sum().item()
-                break
-            print(f"Val accuracy: {correct/len(test)}")
+                predicted_total = torch.cat((predicted_total, predicted.cpu()))
+                y_test_total = torch.cat((y_test_total, y_test.cpu()))
+            print(f"\nVal accuracy: {correct/len(test)}")
             
             print(f"Test loss: {sum(test_losses_epoch) / len(test_losses_epoch)}")
             test_losses.append(sum(test_losses_epoch) / len(test_losses_epoch))
 
             writer.add_scalar("Loss/val", test_losses[-1], epoch)
             writer.add_scalar("ACC/val", correct/len(test), epoch)
+            
+
+
+            print("Accuracy:", accuracy(predicted_total, y_test_total).item())
+            print("Precision:", precision(predicted_total,  y_test_total).item())
+            print("Recall:", recall(predicted_total,  y_test_total).item())
+            print("F1 Score:", f1(predicted_total,  y_test_total).item())
         
 
 
@@ -170,18 +243,18 @@ if __name__ == "__main__":
         "print_debug": False,
         "example_image_amount": 4,
         "save_reconstructions_first_epoch": True,
-        "batch_size": 32,
-        "learning_rate": 3e-4, # for x-ray
+        "batch_size": 64,
+        "learning_rate": 1e-4, # for x-ray
         "max_epochs": 100000,
         "early_stopping_epochs": 3,
-        "input_types": ["image", "reconstruction", "error_map"],
+        "input_types": ["image",], #"error_map"],
 
 
 
         "model_settings" : {
             "encoder_architecture": "VIT",
             "decoder_architecture": "VIT",
-            "num_hidden": 128,
+            "num_hidden": 256,
             "num_residual_hidden": 128,
             "embedding_dim": 64,
             "num_embeddings": 512,

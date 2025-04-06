@@ -2,6 +2,8 @@
 
 import torchvision
 import torchvision.transforms as transforms
+import torch
+from torch.utils.data import Subset
 
 def get_dataset(dataset_name: str, print_stats = False, disable_augmentation = False):
     """ Retrieves dataset with name dataset name from disk and returns it"""
@@ -31,6 +33,17 @@ def get_dataset(dataset_name: str, print_stats = False, disable_augmentation = F
     if dataset_name == "CRC":
         train = torchvision.datasets.ImageFolder("./datasets/CRC/val/", transform=img_transforms)
         test = torchvision.datasets.ImageFolder("./datasets/CRC/test/", transform=transforms_val)
+
+        # Calculate 1/10th size
+        subset_size = len(test) // 2
+
+        import random
+        # Randomly select indices
+        indices = random.sample(range(len(test)), subset_size)
+
+        # Create subset
+        test = Subset(test, indices)
+
         input_shape = (224, 224)
         channels = 3
         var = 0.225 # Precomputed
