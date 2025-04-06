@@ -25,22 +25,13 @@ I am not particularly happy with the current version of the trained vq-vae for r
 I think, currently, too much of the reconstruction error is due to poor reconstruciton where too much detail is lost. This results in an error that effectively masks the error that occurs due to (parts of) the input image (cancerous) being out of the distrubution it was trained on (non-cancerous).
 
 ## Final Results: Experiment
-For a comparison, I've trained models using the ResNet18 architecture. Training was performed on 10k images that were not used during the training of the reconstruction-model. Validation was performed on another held-out 10k images.
+For a comparison, I've trained models using the ResNet18 architecture. Training was performed on 10k images that were not used during the training of the reconstruction-model. Validation was performed on another held-out 10k images. A comparison was made between only using the image as input, and using both the image, and the pixel-wise reconstruction as input.
 
-A comparison was made between only using the image as input, and using both the image, and the pixel-wise reconstruction as input.
-
-While the dataset originally contains 9 different classes, for the sake of this experiment they were group under Cancerous (1) or Non-Cancerous.
-
-A weighted loss function was used to compensate for the imbalance in the dataset. Which is approximately 2 cancerous slides for every 7 non-cancerous slides
+While the dataset originally contains 9 different classes, for the sake of this experiment they were group under Cancerous (1) or Non-Cancerous.A weighted loss function was used to compensate for the imbalance in the dataset. Which is approximately 2 cancerous slides for every 7 non-cancerous slides
 
 ### CNN: image only
-Train loss: 0.26374864497054845
-Train accuracy: 0.8797398699349674
-
-Val accuracy: 0.9182817182817182
-Test loss: 0.2269537750631571
-Accuracy: 0.9182817339897156
-Precision: 0.8078078031539917
-Recall: 0.8755085468292236
-F1 Score: 0.840296745300293
+- Accuracy: 0.9182817339897156
+- Precision: 0.8078078031539917
+- Recall: 0.8755085468292236
+- F1 Score: 0.840296745300293
 
