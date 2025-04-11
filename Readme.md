@@ -32,10 +32,18 @@ While the dataset initially contains 9 different classes, for the sake of this e
 Averaging over the entire training dataset, which the VQ VAE has never seen, the average MSE reconstruction error for non-cancerous images is 0.036, while the average for cancerous images is 0.054. This is a positive result, indicating that the reconstruction error for cells outside of the distribution of healthy cells will be higher, confirming our initial theory.
 
 ### CNN: image only
-- Accuracy: 0.9182817339897156
-- Precision: 0.8078078031539917
-- Recall: 0.8755085468292236
-- F1 Score: 0.840296745300293
+Val accuracy: 0.9596403596403597
+Accuracy: 0.959640383720398
+Precision: 0.8839150071144104
+Recall: 0.9596375823020935
+F1 Score: 0.9202211499214172
+
+### CNN: image + errormap
+Val accuracy: 0.9654345654345654
+Accuracy: 0.9654345512390137
+Precision: 0.9119746088981628
+Recall: 0.9488449096679688
+F1 Score: 0.9300444722175598
 
 
 ## Results: Experiment 2 (improved)
