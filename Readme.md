@@ -29,7 +29,7 @@ For a comparison, I've trained models using the ResNet18 architecture. Training 
 
 While the dataset initially contains 9 different classes, for the sake of this experiment they were group under Cancerous (1) or Non-Cancerous.A weighted loss function was used to compensate for the imbalance in the dataset. Which is approximately 2 cancerous slides for every 7 non-cancerous slides.
 
-Averaging over the entire training dataset, which the VQ VAE has never seen, the average MSE reconstruction error for non-cancerous images is 0.036, while the average for cancerous images is 0.054. This is a positive result, indicating that the reconstruction error for cells outside of the distribution of healthy cells will be higher, confirming our initial theory.
+Averaging over the entire training dataset, which the VQ VAE has never seen, the average MSE reconstruction error for non-cancerous images is 0.036, while the average for cancerous images is 0.054 (+50%). This is a positive result, indicating that the reconstruction error for cells outside of the distribution of healthy cells will be higher, confirming our initial theory.
 
 ### CNN: image only
 Val accuracy: 0.9596403596403597
@@ -46,7 +46,12 @@ Recall: 0.9488449096679688
 F1 Score: 0.9300444722175598
 
 
-## Results: Experiment 2 (improved)
+## Results extended: improving VQ-VAE reconstructions
+
+After the initial experiment, I set out to create a VQ-VAE which made higher quality recontructions. I increased the latent resolution from 32x32 to 64x64, The ViT patch size from 8x8 to 4x4, and reduced the codebook size from 512 to 64. Unfortunately due to higher VRAM usage, i had to use a CNN-based decoder instead of ViT one.
+
+Averaging over the entire training dataset, which the VQ VAE has never seen, the average MSE reconstruction error for non-cancerous images is 0.023, while the average for cancerous images is 0.036 (+56.5%). The newly trained VQ-VAE has a lower loss than the previous model. I theorized a higher quality recontruction should result in a bigger relative difference in reconstruction error between cancer and non-cancerous cells. Which it did (50% vs 56.5% relative increase)
+
 
 
 ## Next Steps
