@@ -32,24 +32,16 @@ While the dataset initially contains 9 different classes, for the sake of this e
 Averaging over the entire training dataset, which the VQ VAE has never seen, the average MSE reconstruction error for non-cancerous images is 0.036, while the average for cancerous images is 0.054 (+50%). This is a positive result, indicating that the reconstruction error for cells outside of the distribution of healthy cells will be higher, confirming our initial theory.
 
 ### CNN: image only (validation)
-- Accuracy: 0.959640383720398
-- Precision: 0.8839150071144104
-- Recall: 0.9596375823020935
-- F1 Score: 0.9202211499214172
+- Accuracy: 0.960
+- Precision: 0.884
+- Recall: 0.960
+- F1 Score: 0.920
 
 ### CNN: image + errormap (validation)
-- Accuracy: 0.9654345512390137
-- Precision: 0.9119746088981628
-- Recall: 0.9488449096679688
-- F1 Score: 0.9300444722175598
-
-### CNN: image + errormap from improved VQ-VAE (validation)
-Accuracy: 0.9636363387107849
-Precision: 0.9052711725234985
-Recall: 0.9533386826515198
-F1 Score: 0.9286834001541138
-
-
+- Accuracy: 0.965
+- Precision: 0.912
+- Recall: 0.949
+- F1 Score: 0.930
 
 ## Results extended: improving VQ-VAE reconstructions
 
@@ -57,7 +49,10 @@ After the initial experiment, I set out to create a VQ-VAE which made higher qua
 
 Averaging over the entire training dataset, which the VQ VAE has never seen, the average MSE reconstruction error for non-cancerous images is 0.023, while the average for cancerous images is 0.036 (+56.5%). The newly trained VQ-VAE has a lower loss than the previous model. I theorized a higher quality recontruction should result in a bigger relative difference in reconstruction error between cancer and non-cancerous cells. Which it did (50% vs 56.5% relative increase)
 
+### CNN: image + errormap from improved VQ-VAE (validation)
+- Accuracy: 0.964
+- Precision: 0.905
+- Recall: 0.953
+- F1 Score: 0.929
 
-
-## Next Steps
-As a next step, I need to improve the quality of the reconstructions. One of the the most important parts of this is increacing the latent resolution from 32x32 to 64x64, which should allow for more details to be modelled. Also experiment with smaller codebook sizes.
+Unfortunately, the improved reconstruction did not lead to further improved detection performance.
