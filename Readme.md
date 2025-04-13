@@ -4,9 +4,6 @@ In this repository, I will be performing classification of the presence of cance
 
 The reconstruction error will thus be a proxy of how much a sample looks like the distribution that the VQ-VAE was trained on, which was only healthy tissue. This reconstruction error could be directly taken as the likelihood that a sample is cancerous, but a better approach is to use the pixel-wise reconstruction error to train a new CNN in a supervised way.
 
-*Note: for the amount of channels I'm assuming an input image with a single channel*
-
-
 ## Reconstruction
 
 ![alt text](gif.gif)
